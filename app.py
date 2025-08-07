@@ -51,23 +51,45 @@ canvas_result = st_canvas(
 # Submit button logic
 if submit_clicked:
     if canvas_result.image_data is not None:
-        # Preprocess image
-        img = Image.fromarray((255 - canvas_result.image_data[:, :, 0]).astype('uint8'))
-        img = img.resize((28, 28))
-        img = ImageOps.invert(img).convert('L')
+        # Step 1: Convert canvas to grayscale image and invert colors
+        img = Image.fromarray(canvas_result.image_data[:, :, 0].astype('uint8')).convert('L')
+        img = ImageOps.invert(img)
 
-        # Show processed image
-        st.image(img, caption="Preprocessed Image (28x28)", width=100)
+        # Step 2: Binarize the image
+        img = img.point(lambda x: 0 if x < 50 else 255, mode='L')
 
-        # Prepare tensor
-        img_tensor = torch.tensor(np.array(img), dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0
+        # Step 3: Crop to bounding box if available
+        bbox = img.getbbox()
+        if bbox:
+            img = img.crop(bbox)
 
-        # Predict
+        # Step 4: Resize to fit 20x20 while keeping aspect ratio
+        img.thumbnail((20, 20), Image.Resampling.LANCZOS)
+
+        # Step 5: Pad to 28x28
+        new_img = Image.new('L', (28, 28), 0)  # black background
+        upper_left = ((28 - img.size[0]) // 2, (28 - img.size[1]) // 2)
+        new_img.paste(img, upper_left)
+
+        # Step 6: Convert to normalized tensor [1, 1, 28, 28]
+        img_tensor = torch.tensor(np.array(new_img), dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0
+
+        # Debug: Show processed image
+        # st.image(new_img, caption="Processed 28x28 Image", width=100)
+        # st.write("Input tensor shape:", img_tensor.shape)
+        # st.write("Min pixel value:", img_tensor.min().item())
+        # st.write("Max pixel value:", img_tensor.max().item())
+
+        # Step 7: Predict
         with torch.no_grad():
             output = model(img_tensor)
             probs = F.softmax(output, dim=1)
             pred = torch.argmax(probs, dim=1).item()
             confidence = torch.max(probs).item()
+
+        # Debug - Display probabilities
+        # for i, p in enumerate(probs[0]):
+        #     st.write(f"{i}: {p:.2%}")
 
         # Output
         st.subheader(f"Prediction: {pred}")
