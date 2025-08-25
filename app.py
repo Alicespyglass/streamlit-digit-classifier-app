@@ -73,15 +73,16 @@ def preprocess_canvas_image(canvas_data):
     img_tensor = torch.tensor(np.array(new_img), dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0
     return new_img, img_tensor
 
-# Updated function signature and logic
-def log_prediction(predicted, true_label=None, image_data=None):
+def log_prediction(predicted, true_label=None, image_data=None, confidence=None):
     try:
+        # Check if the user's feedback matches the model's prediction
+        is_correct = (predicted == true_label)
+        
         # Convert the numpy array to a bytes object for storage
         if image_data is not None:
             from io import BytesIO
             from PIL import Image
             img_buffer = BytesIO()
-            # Ensure the image is in a format PIL can handle, like 'L' (grayscale)
             img = Image.fromarray(image_data[:, :, 0]).convert('L')
             img.save(img_buffer, format="PNG")
             img_bytes = img_buffer.getvalue()
@@ -90,14 +91,16 @@ def log_prediction(predicted, true_label=None, image_data=None):
 
         with st.session_state.db_engine.begin() as conn:
             query = text(
-                "INSERT INTO predictions (timestamp, predicted_digit, true_label, image_data) "
-                "VALUES (:ts, :pred, :true_label, :img_data)"
+                "INSERT INTO predictions (timestamp, predicted_digit, true_label, image_data, confidence, is_correct) "
+                "VALUES (:ts, :pred, :true_label, :img_data, :conf, :is_correct)"
             )
             params = {
                 "ts": datetime.now(), 
                 "pred": predicted, 
                 "true_label": true_label,
-                "img_data": img_bytes
+                "img_data": img_bytes,
+                "conf": confidence,
+                "is_correct": is_correct
             }
             
             conn.execute(query, params)
@@ -166,6 +169,7 @@ if submit_clicked:
         st.warning("Please draw a digit before submitting.")
 
 # the feedback form
+# In your main Streamlit App section, inside the feedback form
 if st.session_state.prediction_made:
     st.subheader(f"Prediction: {st.session_state.predicted_digit}")
     st.write(f"Confidence: {st.session_state.confidence:.2%}")
@@ -181,8 +185,15 @@ if st.session_state.prediction_made:
         submitted = st.form_submit_button("Submit Feedback")
 
         if submitted:
-            # Pass the image data to the log function
-            log_prediction(st.session_state.predicted_digit, true_label, canvas_result.image_data)
-
-if st.session_state.feedback_success:
-    st.success("Thanks for your feedback! It helps improve the model.")
+            # Pass the image data and confidence to the log function
+            log_prediction(
+                st.session_state.predicted_digit,
+                true_label,
+                canvas_result.image_data,
+                st.session_state.confidence
+            )
+            if st.session_state.feedback_success:
+                st.success("✅ Feedback logged successfully!")
+            else:
+                st.error("❌ Failed to log feedback. See errors above.")              
+        
