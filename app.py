@@ -8,7 +8,8 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from PIL import Image, ImageOps
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
+from sqlalchemy.exc import OperationalError
 
 from model import DigitClassifier
 
@@ -22,26 +23,43 @@ load_dotenv()
 # --------------------
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
-    st.error("DATABASE_URL environment variable not set")
+    st.error("DATABASE_URL environment variable not set. Please check your .env file.")
     st.stop()
 
 # Initialize database engine in session state for a single, long-lived connection
 if "db_engine" not in st.session_state:
-    st.session_state.db_engine = create_engine(DATABASE_URL)
+    try:
+        st.session_state.db_engine = create_engine(DATABASE_URL)
+        with st.session_state.db_engine.connect() as conn:
+            inspector = inspect(conn)
+            st.success("✅ Successfully connected to the database!")
+            st.write(f"Connected to database: `{st.session_state.db_engine.url.database}`")
+            st.write("Checking for `predictions` table...")
+            if 'predictions' in inspector.get_table_names():
+                st.write("`predictions` table found.")
+            else:
+                st.error("`predictions` table not found! Please ensure it exists.")
+                st.stop()
+    except OperationalError as e:
+        st.error(f"❌ Failed to connect to the database. Check your DATABASE_URL in the .env file.")
+        st.error(f"Error details: {e}")
+        st.stop()
+    except Exception as e:
+        st.error(f"❌ An unexpected error occurred during database connection.")
+        st.error(f"Error details: {e}")
+        st.stop()
 
 # --------------------
 # Helper Functions
 # --------------------
 @st.cache_resource
 def load_model():
-    """Load the pre-trained PyTorch model."""
     model = DigitClassifier()
     model.load_state_dict(torch.load("mnist_model.pth", map_location="cpu"))
     model.eval()
     return model
 
 def preprocess_canvas_image(canvas_data):
-    """Preprocess the canvas data into a 28x28 grayscale tensor."""
     img = Image.fromarray(canvas_data[:, :, 0].astype('uint8')).convert('L')
     img = ImageOps.invert(img)
     img = img.point(lambda x: 0 if x < 50 else 255, mode='L')
@@ -55,23 +73,40 @@ def preprocess_canvas_image(canvas_data):
     img_tensor = torch.tensor(np.array(new_img), dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0
     return new_img, img_tensor
 
-def log_prediction(predicted, true_label=None):
-    """Log prediction to the database."""
+# Updated function signature and logic
+def log_prediction(predicted, true_label=None, image_data=None):
     try:
+        # Convert the numpy array to a bytes object for storage
+        if image_data is not None:
+            from io import BytesIO
+            from PIL import Image
+            img_buffer = BytesIO()
+            # Ensure the image is in a format PIL can handle, like 'L' (grayscale)
+            img = Image.fromarray(image_data[:, :, 0]).convert('L')
+            img.save(img_buffer, format="PNG")
+            img_bytes = img_buffer.getvalue()
+        else:
+            img_bytes = None
+
         with st.session_state.db_engine.begin() as conn:
-            conn.execute(
-                text(
-                    "INSERT INTO predictions (timestamp, predicted_digit, true_label) "
-                    "VALUES (:ts, :pred, :true_label)"
-                ),
-                {"ts": datetime.now(), "pred": predicted, "true_label": true_label}
+            query = text(
+                "INSERT INTO predictions (timestamp, predicted_digit, true_label, image_data) "
+                "VALUES (:ts, :pred, :true_label, :img_data)"
             )
-        st.info(f"✅ Logged prediction={predicted}, true_label={true_label} to DB")
-        with st.session_state.db_engine.connect() as conn:
-            last = conn.execute(text("SELECT * FROM predictions ORDER BY id DESC LIMIT 1")).fetchone()
-            st.write("Last row in DB:", last)
+            params = {
+                "ts": datetime.now(), 
+                "pred": predicted, 
+                "true_label": true_label,
+                "img_data": img_bytes
+            }
+            
+            conn.execute(query, params)
+        st.session_state.feedback_success = True
+    
     except Exception as e:
-        st.error(f"❌ Failed to log prediction: {e}")
+        st.error(f"❌ Failed to log prediction: {type(e).__name__} - {e}")
+        st.warning("This could be a permissions issue, a typo in the table/column name, or a data type mismatch.")
+        st.session_state.feedback_success = False
 
 # --------------------
 # Main Streamlit App
@@ -83,8 +118,9 @@ if "canvas_key" not in st.session_state:
     st.session_state.canvas_key = "canvas_default"
 if "prediction_made" not in st.session_state:
     st.session_state.prediction_made = False
+if "feedback_success" not in st.session_state:
+    st.session_state.feedback_success = False
 
-# Buttons
 col1, col2 = st.columns([1, 1])
 with col1:
     submit_clicked = st.button("Submit Drawing", type="primary")
@@ -92,9 +128,9 @@ with col2:
     if st.button("Reset"):
         st.session_state.canvas_key = str(uuid.uuid4())
         st.session_state.prediction_made = False
+        st.session_state.feedback_success = False
         st.rerun()
 
-# Canvas
 canvas_result = st_canvas(
     fill_color="white",
     stroke_width=10,
@@ -106,25 +142,30 @@ canvas_result = st_canvas(
     key=st.session_state.canvas_key
 )
 
-# Load model
 model = load_model()
 
-# Prediction logic
-if submit_clicked and canvas_result.image_data is not None:
-    img, img_tensor = preprocess_canvas_image(canvas_result.image_data)
-    with torch.no_grad():
-        output = model(img_tensor)
-        probs = F.softmax(output, dim=1)
-        pred = torch.argmax(probs, dim=1).item()
-        confidence = torch.max(probs).item()
+# Check for empty canvas before making a prediction
+if submit_clicked:
+    if canvas_result.json_data is not None and len(canvas_result.json_data["objects"]) > 0:
+        # User has drawn something, proceed with prediction
+        img, img_tensor = preprocess_canvas_image(canvas_result.image_data)
+        with torch.no_grad():
+            output = model(img_tensor)
+            probs = F.softmax(output, dim=1)
+            pred = torch.argmax(probs, dim=1).item()
+            confidence = torch.max(probs).item()
 
-    st.session_state.predicted_digit = pred
-    st.session_state.confidence = confidence
-    st.session_state.processed_image = img
-    st.session_state.prediction_made = True
-    st.rerun()
+        st.session_state.predicted_digit = pred
+        st.session_state.confidence = confidence
+        st.session_state.processed_image = img
+        st.session_state.prediction_made = True
+        st.session_state.feedback_success = False
+        st.rerun()
+    else:
+        # Canvas is empty, show warning
+        st.warning("Please draw a digit before submitting.")
 
-# Display prediction and feedback form if a prediction has been made
+# the feedback form
 if st.session_state.prediction_made:
     st.subheader(f"Prediction: {st.session_state.predicted_digit}")
     st.write(f"Confidence: {st.session_state.confidence:.2%}")
@@ -140,11 +181,8 @@ if st.session_state.prediction_made:
         submitted = st.form_submit_button("Submit Feedback")
 
         if submitted:
-            log_prediction(st.session_state.predicted_digit, true_label)
-            st.success(f"Thanks for your feedback! It helps improve the model.")
-            st.session_state.prediction_made = False
-            st.rerun()
+            # Pass the image data to the log function
+            log_prediction(st.session_state.predicted_digit, true_label, canvas_result.image_data)
 
-else:
-    if submit_clicked:
-        st.warning("Please draw a digit before submitting.")
+if st.session_state.feedback_success:
+    st.success("Thanks for your feedback! It helps improve the model.")
