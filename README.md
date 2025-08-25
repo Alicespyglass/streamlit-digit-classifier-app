@@ -18,8 +18,8 @@ streamlit-digit-classifier-app/
 ├── model.py # PyTorch DigitClassifier model definition
 ├── mnist_model.pth # Trained model weights
 ├── requirements.txt # Python dependencies
+├── .env # Environment variables for database connection
 └── README.md # Project documentation
-
 
 
 
@@ -46,14 +46,61 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### 4. Set up PostgreSQL and `.env`
+1. Start your local PostgreSQL server.
 
-### 4. Run the App
+2. Create a database for the app. Open your terminal and use psql to connect to your PostgreSQL server.
+
+```
+psql -U your_postgres_user -d postgres
+```
+Then, run the following SQL commands:
+
+```
+CREATE DATABASE digit_classifier;
+
+\c digit_classifier;
+
+CREATE TABLE predictions (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ,
+    predicted_digit INTEGER,
+    true_label INTEGER,
+    image_data BYTEA,
+    confidence REAL,
+    is_correct BOOLEAN
+);
+```
+3. Create a .env file in the root directory of your project to store your database credentials securely.
+
+```
+DB_USER=your_postgres_user
+DB_PASSWORD=your_password
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=digit_classifier
+```
+Replace the values with your actual PostgreSQL credentials.
+
+
+### 5. Run the App
 ```
 streamlit run app.py
 ```
 
 
 The app will open in your browser at http://localhost:8501.
+
+### ✍️ Providing Model Feedback
+To help improve the model, you can provide feedback on incorrect predictions.
+
+After the model makes a prediction, a feedback form will appear.
+
+If the prediction is correct, you can confirm it.
+
+If the prediction is wrong, select the correct digit from the dropdown menu and submit the feedback.
+
+This feedback will be stored in the `predictions` table, and the `is_correct` and `feedback_given` columns will be updated. This data can be used in the future to retrain and improve the model.
 
 
 ### 🧠 Model Details
