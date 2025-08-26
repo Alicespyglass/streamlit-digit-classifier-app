@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  digit-db:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - digit-db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  digit-app:
+    build: .
+    restart: always
+    ports:
+      - "8501:8501"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@digit-db:5432/${DB_NAME}
+    volumes:
+      - .:/app
+    depends_on:
+      - digit-db
+
+volumes:
+  digit-db-data:
