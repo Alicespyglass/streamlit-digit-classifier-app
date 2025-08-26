@@ -11,7 +11,7 @@ from PIL import Image, ImageOps
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.exc import OperationalError
 
-from model import DigitClassifier
+from model import CNN
 
 from dotenv import load_dotenv
 
@@ -70,8 +70,8 @@ if "db_engine" not in st.session_state:
 # --------------------
 @st.cache_resource
 def load_model():
-    model = DigitClassifier()
-    model.load_state_dict(torch.load("mnist_model.pth", map_location="cpu"))
+    model = CNN()
+    model.load_state_dict(torch.load("mnist_model_v2.pth", map_location="cpu"))
     model.eval()
     return model
 
