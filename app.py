@@ -213,3 +213,15 @@ if st.session_state.prediction_made:
             else:
                 st.error("❌ Failed to log feedback. See errors above.")              
         
+st.write("---")
+st.subheader("Database Verification")
+try:
+    with st.session_state.db_engine.connect() as conn:
+        last_rows = conn.execute(text("SELECT * FROM predictions ORDER BY id DESC LIMIT 5")).fetchall()
+        if last_rows:
+            st.write("Last 5 rows in the `predictions` table:")
+            st.dataframe(last_rows)
+        else:
+            st.warning("No data found in the `predictions` table.")
+except Exception as e:
+    st.error(f"❌ Failed to display database content. Error: {e}")
