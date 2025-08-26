@@ -2,6 +2,8 @@
 
 A simple Streamlit web app that recognizes hand-drawn digits (0–9) using a PyTorch-trained MNIST model.
 
+Live app [here](http://78.46.148.95:8501/)
+
 ## ✨ Demo
 
 Draw a digit in the canvas, click **Submit Drawing**, and the model will predict what number you drew — along with its confidence and class probabilities.
@@ -141,7 +143,7 @@ Model is saved as mnist_model.pth. You can retrain your own model using the same
 - Reset button to clear canvas
 
 ### 🧪 TODO / Improvements
-- [ ] Improve prediction accuracy (train longer or augment data)
+- [x] Improve prediction accuracy (train longer or augment data)
 - [ ] Deploy to the web (e.g. Streamlit Cloud or Hugging Face Spaces)
 
 
