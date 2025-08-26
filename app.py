@@ -30,15 +30,31 @@ if not DATABASE_URL:
 if "db_engine" not in st.session_state:
     try:
         st.session_state.db_engine = create_engine(DATABASE_URL)
+        
+        # Define the SQL statement to create the table
+        create_table_sql = """
+            CREATE TABLE IF NOT EXISTS predictions (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMPTZ,
+                predicted_digit INTEGER,
+                true_label INTEGER,
+                image_data BYTEA,
+                confidence REAL,
+                is_correct BOOLEAN
+            );
+        """
+
         with st.session_state.db_engine.connect() as conn:
+            # Use `text()` to execute a raw SQL command
+            conn.execute(text(create_table_sql))
+            conn.commit()  # Use conn.commit() to finalize the transaction
+            
+            # Use inspector to verify that the table was created
             inspector = inspect(conn)
-            st.success("✅ Successfully connected to the database!")
-            st.write(f"Connected to database: `{st.session_state.db_engine.url.database}`")
-            st.write("Checking for `predictions` table...")
             if 'predictions' in inspector.get_table_names():
-                st.write("`predictions` table found.")
+                st.success("✅ Successfully connected to the database and ensured `predictions` table exists!")
             else:
-                st.error("`predictions` table not found! Please ensure it exists.")
+                st.error("❌ Failed to create or find the `predictions` table.")
                 st.stop()
     except OperationalError as e:
         st.error(f"❌ Failed to connect to the database. Check your DATABASE_URL in the .env file.")
