@@ -19,6 +19,7 @@ streamlit-digit-classifier-app/
 ├── mnist_model.pth # Trained model weights
 ├── requirements.txt # Python dependencies
 ├── .env # Environment variables for database connection
+├── .gitignore # Specifies intentionally untracked files to ignore
 ├── Dockerfile # Dockerfile for the Streamlit web app
 ├── docker-compose.yml # Docker Compose file to run the app and database
 └── README.md # Project documentation
@@ -122,7 +123,8 @@ This feedback will be stored in the `predictions` table, and the `is_correct` an
 
 ### 🧠 Model Details
 
-Architecture: Simple CNN with ReLU activations and linear layers
+Architecture: Simple CNN with ReLU activations and linear layers - model colab notebook [here](https://colab.research.google.com/drive/19sEVQykfGywE24ScfZnZ07CeQQUtQBNM#scrollTo=UwwJMcXugvFj)
+
 
 Dataset: MNIST handwritten digits
 
