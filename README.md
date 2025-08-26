@@ -11,7 +11,7 @@ Draw a digit in the canvas, click **Submit Drawing**, and the model will predict
 
 
 ## 🗂️ Project Structure
-
+```
 streamlit-digit-classifier-app/
 │
 ├── app.py # Streamlit app UI and inference logic
@@ -19,21 +19,63 @@ streamlit-digit-classifier-app/
 ├── mnist_model.pth # Trained model weights
 ├── requirements.txt # Python dependencies
 ├── .env # Environment variables for database connection
+├── Dockerfile # Dockerfile for the Streamlit web app
+├── docker-compose.yml # Docker Compose file to run the app and database
 └── README.md # Project documentation
-
+```
 
 
 ## 🛠️ Setup Instructions
 
-### 1. Clone the Repository
+### Option 1. Run with Docker (Recommended)
+
+This is the easiest way to get the app running, as it handles all dependencies and the database setup automatically.
+
+#### 1. Clone the Repository
 
 ```
-git clone https://github.com/yourusername/streamlit-digit-classifier-app.git
+git clone https://github.com/alicespylgass/streamlit-digit-classifier-app.git
 cd streamlit-digit-classifier-app
 ```
 
+#### 2. Set up Your Environment
 
-### 2. Create a Virtual Environment (Recommended)
+Create a `.env` file in the root directory of your project to store your database credentials.
+
+```
+DB_USER=your_postgres_user
+DB_PASSWORD=your_password
+DB_NAME=digit_classifier
+```
+
+Replace the values with your actual PostgreSQL credentials.
+
+Note: Do not commit your .env file to version control.
+
+
+#### 3. Run the App
+
+Ensure you have **Docker Desktop** installed and running on your machine. From the project's root directory, run the following command to build and start the containers.
+
+```
+docker-compose up --build
+```
+
+The app will automatically create the `predictions` table in the database. Once the containers are running, navigate to `http://localhost:8501` in your browser.
+
+
+### Option 2. Run locally
+
+Use this option if you prefer to manage the dependencies and database directly on your local machine.
+
+#### 1. Clone the Repository
+
+```
+git clone https://github.com/alicespylgass/streamlit-digit-classifier-app.git
+cd streamlit-digit-classifier-app
+```
+
+#### 2. Create a Virtual Environment (Recommended)
 
 ```
 python3 -m venv venv
@@ -47,47 +89,22 @@ pip install -r requirements.txt
 ```
 
 ### 4. Set up PostgreSQL and `.env`
-1. Start your local PostgreSQL server.
+- Start your local PostgreSQL server.
 
-2. Create a database for the app. Open your terminal and use psql to connect to your PostgreSQL server.
-
-```
-psql -U your_postgres_user -d postgres
-```
-Then, run the following SQL commands:
+- Create a .env file in the root directory of your project with your database credentials.
 
 ```
-CREATE DATABASE digit_classifier;
-
-\c digit_classifier;
-
-CREATE TABLE predictions (
-    id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMPTZ,
-    predicted_digit INTEGER,
-    true_label INTEGER,
-    image_data BYTEA,
-    confidence REAL,
-    is_correct BOOLEAN
-);
-```
-3. Create a .env file in the root directory of your project to store your database credentials securely.
-
-```
-DB_USER=your_postgres_user
-DB_PASSWORD=your_password
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=digit_classifier
+DATABASE_URL=postgresql://your_postgres_user:your_password@localhost:5432/digit_classifier
 ```
 Replace the values with your actual PostgreSQL credentials.
+
+Note: Your app will automatically create the `predictions` table when you run it for the first time.
 
 
 ### 5. Run the App
 ```
 streamlit run app.py
 ```
-
 
 The app will open in your browser at http://localhost:8501.
 
@@ -123,7 +140,6 @@ Model is saved as mnist_model.pth. You can retrain your own model using the same
 
 ### 🧪 TODO / Improvements
 - [ ] Improve prediction accuracy (train longer or augment data)
-- [ ] Add data collection from feedback form
 - [ ] Deploy to the web (e.g. Streamlit Cloud or Hugging Face Spaces)
 
 
